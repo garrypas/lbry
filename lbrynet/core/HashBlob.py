@@ -182,22 +182,22 @@ class HashBlob(object):
         return d
 
     def open_for_writing(self, peer):
-        pass
+        raise NotImplementedError()
 
     def open_for_reading(self):
-        pass
+        raise NotImplementedError()
 
     def delete(self):
-        pass
+        raise NotImplementedError()
 
     def close_read_handle(self, file_handle):
-        pass
+        raise NotImplementedError()
 
     def _close_writer(self, writer):
-        pass
+        raise NotImplementedError()
 
     def _save_verified_blob(self, writer):
-        pass
+        raise NotImplementedError()
 
     def __str__(self):
         return self.blob_hash[:16]
