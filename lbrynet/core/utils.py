@@ -49,9 +49,11 @@ def call_later(delay, func, *args, **kwargs):
     from twisted.internet import reactor
     return reactor.callLater(delay, func, *args, **kwargs)
 
+
 def safe_start_looping_call(looping_call, interval_sec):
     if not looping_call.running:
         looping_call.start(interval_sec)
+
 
 def safe_stop_looping_call(looping_call):
     if looping_call.running:
@@ -127,3 +129,18 @@ def get_sd_hash(stream_info):
 
 def json_dumps_pretty(obj, **kwargs):
     return json.dumps(obj, sort_keys=True, indent=2, separators=(',', ': '), **kwargs)
+
+
+def show_caller(fn):
+    import inspect
+
+    def wrapper(*args, **kwargs):
+        stack = inspect.stack()
+        for i, frame in enumerate(stack):
+            if frame[3] == fn.__name__:
+                log.info("Called %s:%s from %s:%i", inspect.getmodule(fn).__name__,
+                         fn.__name__, stack[i + 1][1], stack[i + 1][2])
+                break
+        del stack
+        return fn(*args, **kwargs)
+    return wrapper
