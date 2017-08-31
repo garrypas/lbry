@@ -1,10 +1,7 @@
-from StringIO import StringIO
 from io import BytesIO
 import logging
 import os
-import tempfile
 import threading
-import shutil
 from twisted.internet import interfaces, defer, threads
 from twisted.protocols.basic import FileSender
 from twisted.web.client import FileBodyProducer
@@ -294,52 +291,6 @@ class BlobFile(HashBlob):
                 raise DownloadCanceledError()
 
 
-class TempBlob(HashBlob):
-    """A HashBlob which will only exist in memory"""
-    def __init__(self, *args):
-        HashBlob.__init__(self, *args)
-        self.data_buffer = ""
-
-    def open_for_writing(self, peer):
-        if not peer in self.writers:
-            temp_buffer = StringIO()
-            finished_deferred = defer.Deferred()
-            writer = HashBlobWriter(temp_buffer, self.get_length, self.writer_finished)
-
-            self.writers[peer] = (writer, finished_deferred)
-            return finished_deferred, writer.write, writer.cancel
-        return None, None, None
-
-    def open_for_reading(self):
-        if self._verified is True:
-            return StringIO(self.data_buffer)
-        return None
-
-    def delete(self):
-        if not self.writers and not self.readers:
-            self._verified = False
-            self.data_buffer = ''
-            return defer.succeed(True)
-        else:
-            return defer.fail(Failure(
-                ValueError("Blob is currently being read or written and cannot be deleted")))
-
-    def close_read_handle(self, file_handle):
-        file_handle.close()
-
-    def _close_writer(self, writer):
-        if writer.write_handle is not None:
-            writer.write_handle.close()
-            writer.write_handle = None
-
-    def _save_verified_blob(self, writer):
-        if not self.data_buffer:
-            self.data_buffer = writer.write_handle.getvalue()
-            writer.write_handle.close()
-            writer.write_handle = None
-            return defer.succeed(True)
-        else:
-            return defer.fail(Failure(DownloadCanceledError()))
 
 
 class HashBlobCreator(object):
@@ -393,16 +344,3 @@ class BlobFileCreator(HashBlobCreator):
 
     def _write(self, data):
         self.buffer.write(data)
-
-
-class TempBlobCreator(HashBlobCreator):
-    def __init__(self):
-        HashBlobCreator.__init__(self)
-        # TODO: use StringIO
-        self.data_buffer = ''
-
-    def _close(self):
-        return defer.succeed(True)
-
-    def _write(self, data):
-        self.data_buffer += data
