@@ -117,7 +117,6 @@ class HashBlob(object):
         return False
 
     def read(self, write_func):
-
         def close_self(*args):
             self.close_read_handle(file_handle)
             return args[0]
@@ -206,8 +205,8 @@ class HashBlob(object):
 class BlobFile(HashBlob):
     """A HashBlob which will be saved to the hard disk of the downloader"""
 
-    def __init__(self, blob_dir, *args):
-        HashBlob.__init__(self, *args)
+    def __init__(self, blob_dir, blob_hash, length=None):
+        HashBlob.__init__(self, blob_hash, length)
         self.blob_dir = blob_dir
         self.file_path = os.path.join(blob_dir, self.blob_hash)
         self.setting_verified_blob_lock = threading.Lock()
@@ -291,56 +290,31 @@ class BlobFile(HashBlob):
                 raise DownloadCanceledError()
 
 
-
-
-class HashBlobCreator(object):
-    def __init__(self):
+class BlobFileCreator(object):
+    def __init__(self, blob_dir):
+        self.blob_dir = blob_dir
+        self.buffer = BytesIO()
+        self._is_open = True
         self._hashsum = get_lbry_hash_obj()
         self.len_so_far = 0
         self.blob_hash = None
         self.length = None
 
-    def open(self):
-        pass
-
+    @defer.inlineCallbacks
     def close(self):
         self.length = self.len_so_far
-        if self.length == 0:
-            self.blob_hash = None
-        else:
-            self.blob_hash = self._hashsum.hexdigest()
-        d = self._close()
-        if self.blob_hash is not None:
-            d.addCallback(lambda _: self.blob_hash)
-        else:
-            d.addCallback(lambda _: None)
-        return d
-
-    def write(self, data):
-        self._hashsum.update(data)
-        self.len_so_far += len(data)
-        self._write(data)
-
-    def _close(self):
-        pass
-
-    def _write(self, data):
-        pass
-
-
-class BlobFileCreator(HashBlobCreator):
-    def __init__(self, blob_dir):
-        HashBlobCreator.__init__(self)
-        self.blob_dir = blob_dir
-        self.buffer = BytesIO()
-
-    def _close(self):
-        if self.blob_hash is not None:
+        self.blob_hash = self._hashsum.hexdigest()
+        if self.blob_hash is self._is_open:
             self.buffer.seek(0)
             out_path = os.path.join(self.blob_dir, self.blob_hash)
             producer = FileBodyProducer(self.buffer)
-            return producer.startProducing(open(out_path, 'wb'))
-        return defer.succeed(True)
+            yield producer.startProducing(open(out_path, 'wb'))
+            self._is_open = False
+        defer.returnValue(self.blob_hash)
 
-    def _write(self, data):
+    def write(self, data):
+        if not self._is_open:
+            raise IOError
+        self._hashsum.update(data)
+        self.len_so_far += len(data)
         self.buffer.write(data)
